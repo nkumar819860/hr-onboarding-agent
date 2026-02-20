@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Notification MCP Mock Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .endpoint { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .method { color: #007bff; font-weight: bold; }
+        .status { color: #28a745; }
+    </style>
+</head>
+<body>
+    <h1>Notification MCP Server - Mock API</h1>
+    <p><span class="status">Status: Running</span></p>
+    
+    <h2>Available Endpoints:</h2>
+    
+    <div class="endpoint">
+        <div><span class="method">GET</span> /mcp/health</div>
+        <div>Health check endpoint</div>
+    </div>
+    
+    <div class="endpoint">
+        <div><span class="method">POST</span> /mcp/notifications/email</div>
+        <div>Send email notification</div>
+    </div>
+    
+    <div class="endpoint">
+        <div><span class="method">GET</span> /mcp/notifications/{employeeId}</div>
+        <div>Get notifications for employee</div>
+    </div>
+    
+    <div class="endpoint">
+        <div><span class="method">GET</span> /mcp/templates</div>
+        <div>List email templates</div>
+    </div>
+
+    <script>
+        // Mock API responses
+        const mockData = {
+            health: { status: "UP", timestamp: new Date().toISOString() },
+            notifications: {
+                "EMP001": [
+                    {
+                        id: "NOTIF001",
+                        type: "welcome_email",
+                        recipient: "john.doe@company.com",
+                        subject: "Welcome to the Company!",
+                        status: "sent",
+                        sentDate: "2024-01-15T10:00:00Z"
+                    },
+                    {
+                        id: "NOTIF002",
+                        type: "asset_allocation",
+                        recipient: "john.doe@company.com",
+                        subject: "Asset Allocated: iPhone 15 Pro",
+                        status: "sent",
+                        sentDate: "2024-01-15T14:30:00Z"
+                    }
+                ]
+            },
+            templates: [
+                {
+                    id: "welcome_email",
+                    name: "Employee Welcome Email",
+                    subject: "Welcome to {{company}}!",
+                    description: "Welcome email for new employees"
+                },
+                {
+                    id: "asset_allocation",
+                    name: "Asset Allocation Notification",
+                    subject: "Asset Allocated: {{assetName}}",
+                    description: "Notification when assets are allocated"
+                }
+            ]
+        };
+
+        // Simple mock API handler
+        if (window.location.pathname.includes('/health')) {
+            document.body.innerHTML = '<pre>' + JSON.stringify(mockData.health, null, 2) + '</pre>';
+        } else if (window.location.pathname.includes('/templates')) {
+            document.body.innerHTML = '<pre>' + JSON.stringify(mockData.templates, null, 2) + '</pre>';
+        } else if (window.location.pathname.includes('/notifications')) {
+            document.body.innerHTML = '<pre>' + JSON.stringify(mockData.notifications, null, 2) + '</pre>';
+        }
+    </script>
+</body>
+</html>

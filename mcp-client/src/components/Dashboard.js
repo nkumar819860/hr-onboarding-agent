@@ -13,7 +13,7 @@ import {
   People as PeopleIcon,
   Laptop as LaptopIcon,
   Notifications as NotificationsIcon,
-  Health as HealthIcon
+  LocalHospital as HealthIcon
 } from '@mui/icons-material';
 import { useMCPAggregator } from '../services/mcpAggregator';
 

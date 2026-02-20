@@ -25,9 +25,7 @@
             driverClassName="${db.driver}" 
             url="${db.url}" 
             user="${db.user}"
-            password="${db.password}"
-            connectionTimeout="5000"
-            connectionTimeoutUnit="SECONDS"/>
+            password="${db.password}"/>
     </db:config>
 
     <!-- Fallback H2 Database Configuration -->
@@ -35,9 +33,7 @@
         <db:generic-connection 
             driverClassName="org.h2.Driver" 
             url="jdbc:h2:file:./data/notification_fallback;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE" 
-            user="sa"
-            connectionTimeout="3000"
-            connectionTimeoutUnit="SECONDS"/>
+            user="sa"/>
     </db:config>
 
     <!-- Error Handler for Database Failures -->

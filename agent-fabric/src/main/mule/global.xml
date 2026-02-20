@@ -14,28 +14,28 @@
         <http:listener-connection host="${http.host}" port="${http.port}"/>
     </http:listener-config>
 
-    <!-- Employee MCP HTTP Request Configuration -->
+    <!-- Employee MCP HTTP Request Configuration (Cloud) -->
     <http:request-config name="Employee_MCP_Config" doc:name="Employee MCP HTTP Request Configuration">
         <http:request-connection 
-            host="#[if(p('deployment.mode') == 'local') p('employee.mcp.local.url') replace 'http://' with '' replace ':8081' with '' else p('employee.mcp.url') replace 'https://' with '' replace '.us-east-1.cloudhub.io' with '']"
+            host="#[if(p('deployment.mode') == 'local') p('employee.mcp.local.url') replace 'http://' with '' replace ':8081' with '' else p('employee.mcp.url') replace 'https://' with '']"
             port="#[if(p('deployment.mode') == 'local') 8081 else 443]"
             protocol="#[if(p('deployment.mode') == 'local') 'HTTP' else 'HTTPS']"/>
     </http:request-config>
 
-    <!-- Asset MCP HTTP Request Configuration -->
+    <!-- Asset MCP HTTP Request Configuration (Local for hybrid mode) -->
     <http:request-config name="Asset_MCP_Config" doc:name="Asset MCP HTTP Request Configuration">
         <http:request-connection 
-            host="#[if(p('deployment.mode') == 'local') p('asset.mcp.local.url') replace 'http://' with '' replace ':8082' with '' else p('asset.mcp.url') replace 'https://' with '' replace '.us-east-1.cloudhub.io' with '']"
-            port="#[if(p('deployment.mode') == 'local') 8082 else 443]"
-            protocol="#[if(p('deployment.mode') == 'local') 'HTTP' else 'HTTPS']"/>
+            host="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') p('asset.mcp.local.url') replace 'http://' with '' replace ':8082' with '' else p('asset.mcp.url') replace 'https://' with '']"
+            port="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 8082 else 443]"
+            protocol="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 'HTTP' else 'HTTPS']"/>
     </http:request-config>
 
-    <!-- Notification MCP HTTP Request Configuration -->
+    <!-- Notification MCP HTTP Request Configuration (Local for hybrid mode) -->
     <http:request-config name="Notification_MCP_Config" doc:name="Notification MCP HTTP Request Configuration">
         <http:request-connection 
-            host="#[if(p('deployment.mode') == 'local') p('notification.mcp.local.url') replace 'http://' with '' replace ':8083' with '' else p('notification.mcp.url') replace 'https://' with '' replace '.us-east-1.cloudhub.io' with '']"
-            port="#[if(p('deployment.mode') == 'local') 8083 else 443]"
-            protocol="#[if(p('deployment.mode') == 'local') 'HTTP' else 'HTTPS']"/>
+            host="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') p('notification.mcp.local.url') replace 'http://' with '' replace ':8083' with '' else p('notification.mcp.url') replace 'https://' with '']"
+            port="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 8083 else 443]"
+            protocol="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 'HTTP' else 'HTTPS']"/>
     </http:request-config>
 
     <!-- Global Error Handler -->

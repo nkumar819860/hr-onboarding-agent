@@ -36,11 +36,11 @@ else
         <try doc:name="Step 1 - Create Employee">
             <http:request method="POST" path="/mcp/tools/employees" config-ref="Employee_MCP_Config" 
                 doc:name="Create Employee in MCP">
-                <http:headers>
-                    <http:header headerName="Content-Type" value="application/json"/>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
                 <http:body><![CDATA[#[payload.employee]]]></http:body>
+                <http:headers><![CDATA[#[{
+                    'Content-Type': 'application/json',
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="#[payload]" variableName="employeeResult" doc:name="Store Employee Result"/>
             <logger level="INFO" doc:name="Log Employee Created" 
@@ -55,11 +55,11 @@ else
                     <foreach collection="#[payload.assets]" doc:name="For Each Asset">
                         <http:request method="POST" path="#['/mcp/assets/allocate/' ++ vars.employeeResult.employee.id]" 
                             config-ref="Asset_MCP_Config" doc:name="Allocate Asset">
-                            <http:headers>
-                                <http:header headerName="Content-Type" value="application/json"/>
-                                <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                            </http:headers>
                             <http:body><![CDATA[#[payload]]]></http:body>
+                            <http:headers><![CDATA[#[{
+                                'Content-Type': 'application/json',
+                                (p('api.key.header')): p('api.key.value')
+                            }]]]></http:headers>
                         </http:request>
                         <logger level="INFO" doc:name="Log Asset Allocated" 
                             message="Asset allocated: #[payload.asset.name] to employee: #[vars.employeeResult.employee.id]"/>
@@ -108,10 +108,10 @@ output application/json
             
             <http:request method="POST" path="/mcp/notifications/send-batch" 
                 config-ref="Notification_MCP_Config" doc:name="Send Notifications">
-                <http:headers>
-                    <http:header headerName="Content-Type" value="application/json"/>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    'Content-Type': 'application/json',
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="#[payload]" variableName="notificationResult" doc:name="Store Notification Result"/>
             <logger level="INFO" doc:name="Log Notifications Sent" 
@@ -151,9 +151,9 @@ output application/json
         <try doc:name="Get Employee Status">
             <http:request method="GET" path="#['/mcp/tools/employees/' ++ vars.employeeId]" 
                 config-ref="Employee_MCP_Config" doc:name="Get Employee">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="#[payload]" variableName="employeeStatus" doc:name="Store Employee Status"/>
             <error-handler ref="Global_Error_Handler"/>
@@ -163,9 +163,9 @@ output application/json
         <try doc:name="Get Asset Status">
             <http:request method="GET" path="#['/mcp/assets/employee/' ++ vars.employeeId]" 
                 config-ref="Asset_MCP_Config" doc:name="Get Employee Assets">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="#[payload]" variableName="assetStatus" doc:name="Store Asset Status"/>
             <error-handler>
@@ -216,9 +216,9 @@ output application/json
         <try doc:name="Get All Employees">
             <http:request method="GET" path="/mcp/tools/employees" 
                 config-ref="Employee_MCP_Config" doc:name="Get All Employees">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <error-handler ref="Global_Error_Handler"/>
         </try>
@@ -274,9 +274,9 @@ output application/json
             <http:request method="GET" path="/mcp/health" 
                 config-ref="Employee_MCP_Config" doc:name="Ping Employee MCP" 
                 responseTimeout="5000">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="healthy" variableName="employeeMcpStatus" doc:name="Employee MCP Healthy"/>
             <error-handler>
@@ -291,9 +291,9 @@ output application/json
             <http:request method="GET" path="/mcp/health" 
                 config-ref="Asset_MCP_Config" doc:name="Ping Asset MCP" 
                 responseTimeout="5000">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="healthy" variableName="assetMcpStatus" doc:name="Asset MCP Healthy"/>
             <error-handler>
@@ -308,9 +308,9 @@ output application/json
             <http:request method="GET" path="/mcp/health" 
                 config-ref="Notification_MCP_Config" doc:name="Ping Notification MCP" 
                 responseTimeout="5000">
-                <http:headers>
-                    <http:header headerName="${api.key.header}" value="${api.key.value}"/>
-                </http:headers>
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
             </http:request>
             <set-variable value="healthy" variableName="notificationMcpStatus" doc:name="Notification MCP Healthy"/>
             <error-handler>

@@ -1,4 +1,5 @@
 {
+  "name": "hr-onboarding-agent-fabric",
   "minMuleVersion": "4.5.0",
   "requiredProduct": "MULE_EE",
   "classLoaderModelLoaderDescriptor": {

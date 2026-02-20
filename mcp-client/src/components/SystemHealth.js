@@ -37,7 +37,7 @@ import {
   Storage as StorageIcon,
   Timeline as TimelineIcon,
   Notifications as NotificationsIcon,
-  AutorenewIcon,
+  Autorenew as AutorenewIcon,
   InfoOutlined as InfoIcon
 } from '@mui/icons-material';
 import { useMCPAggregator, mcpAPI } from '../services/mcpAggregator';
