@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+      http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <!-- Configuration Properties -->
+    <configuration-properties file="config.properties" doc:name="Configuration properties"/>
+
+    <!-- HTTP Listener Configuration -->
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+        <http:listener-connection host="${http.host}" port="${http.port}" protocol="HTTP"/>
+    </http:listener-config>
+    
+    <!-- HTTPS Listener Configuration for CloudHub -->
+    <http:listener-config name="HTTPS_Listener_config" doc:name="HTTPS Listener config">
+        <http:listener-connection host="${http.host}" port="${https.port}" protocol="HTTPS"/>
+    </http:listener-config>
+
+    <!-- Employee MCP HTTP Request Configuration (Cloud) -->
+    <http:request-config name="Employee_MCP_Config" doc:name="Employee MCP HTTP Request Configuration">
+        <http:request-connection 
+            host="#[if(p('deployment.mode') == 'local') p('employee.mcp.local.url') replace 'http://' with '' replace ':8081' with '' else p('employee.mcp.url') replace 'https://' with '']"
+            port="#[if(p('deployment.mode') == 'local') 8081 else 443]"
+            protocol="#[if(p('deployment.mode') == 'local') 'HTTP' else 'HTTPS']"/>
+    </http:request-config>
+
+    <!-- Asset MCP HTTP Request Configuration (Local for hybrid mode) -->
+    <http:request-config name="Asset_MCP_Config" doc:name="Asset MCP HTTP Request Configuration">
+        <http:request-connection 
+            host="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') p('asset.mcp.local.url') replace 'http://' with '' replace ':8082' with '' else p('asset.mcp.url') replace 'https://' with '']"
+            port="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 8082 else 443]"
+            protocol="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 'HTTP' else 'HTTPS']"/>
+    </http:request-config>
+
+    <!-- Notification MCP HTTP Request Configuration (Local for hybrid mode) -->
+    <http:request-config name="Notification_MCP_Config" doc:name="Notification MCP HTTP Request Configuration">
+        <http:request-connection 
+            host="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') p('notification.mcp.local.url') replace 'http://' with '' replace ':8083' with '' else p('notification.mcp.url') replace 'https://' with '']"
+            port="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 8083 else 443]"
+            protocol="#[if(p('deployment.mode') == 'local' or p('deployment.mode') == 'hybrid') 'HTTP' else 'HTTPS']"/>
+    </http:request-config>
+
+    <!-- Global Error Handler -->
+    <error-handler name="Global_Error_Handler" doc:name="Global Error Handler">
+        <on-error-continue type="HTTP:CONNECTIVITY" doc:name="MCP Connectivity Error">
+            <logger level="ERROR" doc:name="Log MCP Connectivity Error" 
+                message="MCP Server connectivity failed: #[error.description]"/>
+            <set-payload value="#[{
+                'status': 'error',
+                'error': 'MCP_CONNECTIVITY_ERROR',
+                'message': 'One or more MCP servers are unavailable',
+                'timestamp': now()
+            }]" doc:name="MCP Error Response"/>
+            <set-variable value="503" variableName="httpStatus"/>
+        </on-error-continue>
+        
+        <on-error-continue type="HTTP:TIMEOUT" doc:name="MCP Timeout Error">
+            <logger level="ERROR" doc:name="Log MCP Timeout Error" 
+                message="MCP Server timeout: #[error.description]"/>
+            <set-payload value="#[{
+                'status': 'error',
+                'error': 'MCP_TIMEOUT_ERROR',
+                'message': 'MCP server request timed out',
+                'timestamp': now()
+            }]" doc:name="MCP Timeout Response"/>
+            <set-variable value="504" variableName="httpStatus"/>
+        </on-error-continue>
+        
+        <on-error-continue type="ANY" doc:name="General Error">
+            <logger level="ERROR" doc:name="Log General Error" 
+                message="Agent Fabric error: #[error.description]"/>
+            <set-payload value="#[{
+                'status': 'error',
+                'error': 'AGENT_FABRIC_ERROR',
+                'message': error.description,
+                'timestamp': now()
+            }]" doc:name="General Error Response"/>
+            <set-variable value="500" variableName="httpStatus"/>
+        </on-error-continue>
+    </error-handler>
+
+</mule>
