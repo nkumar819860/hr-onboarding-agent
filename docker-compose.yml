@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (shared by all MCP servers)
+  postgres:
+    image: postgres:15
+    container_name: hr-postgres
+    environment:
+      POSTGRES_DB: hr_onboarding
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Employee Onboarding MCP Server
+  employee-mcp:
+    build:
+      context: ./employee-onboarding-mcp
+      dockerfile: Dockerfile
+    container_name: employee-onboarding-mcp
+    ports:
+      - "8081:8081"
+    environment:
+      - HTTP_PORT=8081
+      - DB_MODE=${DB_MODE:-postgres}
+      - DB_URL=${POSTGRES_URL:-jdbc:postgresql://postgres:5432/hr_onboarding}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/mcp/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Asset Allocation MCP Server
+  asset-mcp:
+    build:
+      context: ./asset-allocation-mcp
+      dockerfile: Dockerfile
+    container_name: asset-allocation-mcp
+    ports:
+      - "8082:8082"
+    environment:
+      - HTTP_PORT=8082
+      - DB_MODE=${DB_MODE:-postgres}
+      - DB_URL=${POSTGRES_URL:-jdbc:postgresql://postgres:5432/hr_onboarding}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/mcp/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Notification MCP Server (placeholder for future implementation)
+  notification-mcp:
+    image: nginx:alpine
+    container_name: notification-mcp
+    ports:
+      - "8083:80"
+    volumes:
+      - ./docker/notification-mock:/usr/share/nginx/html
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Agent Fabric (Main Orchestrator)
+  agent-fabric:
+    build:
+      context: ./agent-fabric
+      dockerfile: Dockerfile
+    container_name: hr-agent-fabric
+    ports:
+      - "8080:8080"
+    environment:
+      - HTTP_PORT=8080
+      - DEPLOYMENT_MODE=local
+      - EMPLOYEE_MCP_LOCAL_URL=http://employee-mcp:8081
+      - ASSET_MCP_LOCAL_URL=http://asset-mcp:8082
+      - NOTIFICATION_MCP_LOCAL_URL=http://notification-mcp:80
+    depends_on:
+      employee-mcp:
+        condition: service_healthy
+      asset-mcp:
+        condition: service_healthy
+      notification-mcp:
+        condition: service_healthy
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/agent/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # Adminer (Database Management UI)
+  adminer:
+    image: adminer:latest
+    container_name: hr-adminer
+    ports:
+      - "8090:8080"
+    depends_on:
+      - postgres
+    networks:
+      - hr-network
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  hr-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
