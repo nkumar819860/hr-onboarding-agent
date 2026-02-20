@@ -1,7 +1,7 @@
 {
   "minMuleVersion": "4.5.0",
   "requiredProduct": "MULE_EE",
-  "name": "employee-onboarding-mcp-server",
+  "name": "notification-mcp-server",
   "classLoaderModelLoaderDescriptor": {
     "id": "mule",
     "attributes": {

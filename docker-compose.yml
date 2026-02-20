@@ -1,109 +1,122 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database (shared by all MCP servers)
+  # PostgreSQL Database
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: hr-postgres
     environment:
       POSTGRES_DB: hr_onboarding
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    networks:
-      - hr-network
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Employee Onboarding MCP Server
+  # Employee MCP Server
   employee-mcp:
-    build:
+    build: 
       context: ./employee-onboarding-mcp
       dockerfile: Dockerfile
-    container_name: employee-onboarding-mcp
+    container_name: employee-mcp-server
+    environment:
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8081
+      - DB_MODE=postgres
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/hr_onboarding
+      - DB_DRIVER_CLASS=org.postgresql.Driver
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - LOG_LEVEL=INFO
     ports:
       - "8081:8081"
-    environment:
-      - HTTP_PORT=8081
-      - DB_MODE=${DB_MODE:-postgres}
-      - DB_URL=${POSTGRES_URL:-jdbc:postgresql://postgres:5432/hr_onboarding}
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - hr-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/mcp/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
 
   # Asset Allocation MCP Server
   asset-mcp:
-    build:
+    build: 
       context: ./asset-allocation-mcp
       dockerfile: Dockerfile
-    container_name: asset-allocation-mcp
+    container_name: asset-mcp-server
+    environment:
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8082
+      - DB_MODE=postgres
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/hr_onboarding
+      - DB_DRIVER_CLASS=org.postgresql.Driver
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - LOG_LEVEL=INFO
     ports:
       - "8082:8082"
-    environment:
-      - HTTP_PORT=8082
-      - DB_MODE=${DB_MODE:-postgres}
-      - DB_URL=${POSTGRES_URL:-jdbc:postgresql://postgres:5432/hr_onboarding}
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - hr-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/mcp/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
 
-  # Notification MCP Server (placeholder for future implementation)
+  # Notification MCP Server
   notification-mcp:
-    image: nginx:alpine
-    container_name: notification-mcp
+    build: 
+      context: ./notification-mcp
+      dockerfile: Dockerfile
+    container_name: notification-mcp-server
+    environment:
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8083
+      - DB_MODE=postgres
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/hr_onboarding
+      - DB_DRIVER_CLASS=org.postgresql.Driver
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - LOG_LEVEL=INFO
     ports:
-      - "8083:80"
-    volumes:
-      - ./docker/notification-mock:/usr/share/nginx/html
-    networks:
-      - hr-network
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8083/mcp/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
-  # Agent Fabric (Main Orchestrator)
+  # Agent Fabric (Orchestrator)
   agent-fabric:
-    build:
+    build: 
       context: ./agent-fabric
       dockerfile: Dockerfile
-    container_name: hr-agent-fabric
+    container_name: agent-fabric
+    environment:
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8080
+      - EMPLOYEE_MCP_URL=http://employee-mcp:8081
+      - ASSET_MCP_URL=http://asset-mcp:8082
+      - NOTIFICATION_MCP_URL=http://notification-mcp:8083
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LOG_LEVEL=INFO
     ports:
       - "8080:8080"
-    environment:
-      - HTTP_PORT=8080
-      - DEPLOYMENT_MODE=local
-      - EMPLOYEE_MCP_LOCAL_URL=http://employee-mcp:8081
-      - ASSET_MCP_LOCAL_URL=http://asset-mcp:8082
-      - NOTIFICATION_MCP_LOCAL_URL=http://notification-mcp:80
     depends_on:
       employee-mcp:
         condition: service_healthy
@@ -111,16 +124,35 @@ services:
         condition: service_healthy
       notification-mcp:
         condition: service_healthy
-    networks:
-      - hr-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/agent/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 40s
 
-  # Adminer (Database Management UI)
+  # React MCP Client
+  mcp-client:
+    build: 
+      context: ./mcp-client
+      dockerfile: Dockerfile
+    container_name: mcp-client-ui
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:8080
+      - REACT_APP_EMPLOYEE_MCP_URL=http://localhost:8081
+      - REACT_APP_ASSET_MCP_URL=http://localhost:8082
+      - REACT_APP_NOTIFICATION_MCP_URL=http://localhost:8083
+      - REACT_APP_GROQ_API_KEY=${GROQ_API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      agent-fabric:
+        condition: service_healthy
+    volumes:
+      - ./mcp-client:/app
+      - /app/node_modules
+
+  # Database Admin Interface
   adminer:
     image: adminer:latest
     container_name: hr-adminer
@@ -128,18 +160,12 @@ services:
       - "8090:8080"
     depends_on:
       - postgres
-    networks:
-      - hr-network
     environment:
-      ADMINER_DEFAULT_SERVER: postgres
+      - ADMINER_DEFAULT_SERVER=postgres
 
 volumes:
   postgres_data:
-    driver: local
 
 networks:
-  hr-network:
+  default:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

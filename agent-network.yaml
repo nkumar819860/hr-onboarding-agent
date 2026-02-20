@@ -269,9 +269,9 @@ environment:
     NOTIFICATION_MCP_URL: "http://localhost:8083"
     
   production:
-    EMPLOYEE_MCP_URL: "https://employee-onboarding-mcp-server.us-east-1.cloudhub.io"
-    ASSET_MCP_URL: "https://asset-allocation-mcp-server.us-east-1.cloudhub.io"
-    NOTIFICATION_MCP_URL: "https://notification-mcp-server.us-east-1.cloudhub.io"
+    EMPLOYEE_MCP_URL: "https://employee-onboarding-mcp-server-0etp45.rajrd4-2.usa-e1.cloudhub.io"
+    ASSET_MCP_URL: "https://asset-allocation-mcp-server-0etp45.rajrd4-1.usa-e1.cloudhub.io"
+    NOTIFICATION_MCP_URL: "https://notification-mcp-server-0etp45.rajrd4-1.usa-e1.cloudhub.io"
 
 # Security Configuration
 security:

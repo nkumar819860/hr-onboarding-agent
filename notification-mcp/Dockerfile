@@ -36,7 +36,6 @@ COPY --from=builder /app/target/*.jar $MULE_APPS/
 
 # Copy configuration files
 COPY --from=builder /app/src/main/resources/config.properties $MULE_HOME/conf/
-COPY --from=builder /app/src/main/resources/asset-init.sql $MULE_HOME/conf/
 
 # Create data directory for H2 database
 RUN mkdir -p /opt/mule/data && chown -R mule:mule /opt/mule
@@ -45,11 +44,11 @@ RUN mkdir -p /opt/mule/data && chown -R mule:mule /opt/mule
 USER mule
 
 # Expose port
-EXPOSE 8082
+EXPOSE 8083
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8082/mcp/health || exit 1
+  CMD curl -f http://localhost:8083/mcp/health || exit 1
 
 # Start Mule runtime
 CMD ["/opt/mule/bin/mule", "console"]

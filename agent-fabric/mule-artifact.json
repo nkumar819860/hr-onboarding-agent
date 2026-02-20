@@ -1,19 +1,16 @@
 {
   "minMuleVersion": "4.5.0",
   "requiredProduct": "MULE_EE",
-  "name": "employee-onboarding-mcp-server",
   "classLoaderModelLoaderDescriptor": {
     "id": "mule",
     "attributes": {
-      "exportedResources": []
+      "exportedResources": [],
+      "exportedPackages": [],
+      "includeTestDependencies": "false"
     }
   },
   "bundleDescriptorLoader": {
     "id": "mule",
     "attributes": {}
-  },
-  "javaSpecificationVersions": [
-    "8",
-    "11"
-  ]
+  }
 }
