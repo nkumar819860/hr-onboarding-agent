@@ -1,0 +1,330 @@
+# HR Onboarding Agent Network Configuration
+# Uses Groq LLM to orchestrate MCP servers for employee onboarding
+
+apiVersion: v1
+kind: AgentNetwork
+metadata:
+  name: hr-onboarding-agent-network
+  description: "Comprehensive HR onboarding system with AI orchestration"
+  version: "1.0.0"
+
+# Groq LLM Configuration
+llmProvider:
+  name: groq
+  apiKey: "${GROQ_API_KEY}"
+  model: "llama3-8b-8192"  # Fast Groq model for real-time responses
+  temperature: 0.1  # Low temperature for consistent, reliable responses
+  maxTokens: 4096
+  timeout: 30000
+
+# MCP Server Connections
+mcpServers:
+  # Employee Management MCP
+  - name: employee-mcp
+    description: "Manages employee data, onboarding records, and HR information"
+    connection:
+      type: http
+      url: "${EMPLOYEE_MCP_URL}"
+      port: 8081
+      headers:
+        X-API-Key: "${API_KEY_VALUE}"
+        Content-Type: "application/json"
+    
+    tools:
+      - name: create_employee
+        description: "Create a new employee record"
+        endpoint: "/mcp/tools/employees"
+        method: POST
+        schema:
+          type: object
+          properties:
+            name: 
+              type: string
+              description: "Full name of the employee"
+            email:
+              type: string
+              description: "Employee's email address"
+            department:
+              type: string
+              description: "Department (HR, Engineering, Marketing, Finance, Operations)"
+            position:
+              type: string
+              description: "Job title/position"
+            status:
+              type: string
+              enum: ["PENDING", "ACTIVE", "INACTIVE"]
+              default: "PENDING"
+          required: ["name", "email"]
+
+      - name: get_employee
+        description: "Retrieve employee information by ID"
+        endpoint: "/mcp/tools/employees/{id}"
+        method: GET
+
+      - name: list_employees
+        description: "Get all employees with filtering options"
+        endpoint: "/mcp/tools/employees"
+        method: GET
+
+      - name: update_employee
+        description: "Update employee information"
+        endpoint: "/mcp/tools/employees/{id}"
+        method: PUT
+
+      - name: initialize_employee_database
+        description: "Initialize employee database with sample data"
+        endpoint: "/mcp/init"
+        method: POST
+
+  # Asset Management MCP
+  - name: asset-mcp
+    description: "Handles asset allocation, tracking, and inventory management"
+    connection:
+      type: http
+      url: "${ASSET_MCP_URL}"
+      port: 8082
+      headers:
+        X-API-Key: "${API_KEY_VALUE}"
+        Content-Type: "application/json"
+    
+    tools:
+      - name: allocate_asset
+        description: "Allocate assets to an employee"
+        endpoint: "/mcp/assets/allocate/{employeeId}"
+        method: POST
+        schema:
+          type: object
+          properties:
+            assetType:
+              type: string
+              enum: ["laptop", "monitor", "keyboard", "mouse", "headset", "phone", "access_card", "parking_pass"]
+            name:
+              type: string
+              description: "Asset name or model"
+            priority:
+              type: string
+              enum: ["high", "medium", "low"]
+              default: "medium"
+          required: ["assetType", "name"]
+
+      - name: get_employee_assets
+        description: "Get all assets allocated to an employee"
+        endpoint: "/mcp/assets/employee/{employeeId}"
+        method: GET
+
+      - name: get_asset_inventory
+        description: "Get available asset inventory"
+        endpoint: "/mcp/assets/inventory"
+        method: GET
+
+      - name: return_asset
+        description: "Return an asset from an employee"
+        endpoint: "/mcp/assets/return/{assetId}"
+        method: POST
+
+  # Notification MCP
+  - name: notification-mcp
+    description: "Manages notifications, emails, and communications"
+    connection:
+      type: http
+      url: "${NOTIFICATION_MCP_URL}"
+      port: 8083
+      headers:
+        X-API-Key: "${API_KEY_VALUE}"
+        Content-Type: "application/json"
+    
+    tools:
+      - name: send_welcome_email
+        description: "Send welcome email to new employee"
+        endpoint: "/mcp/notifications/welcome"
+        method: POST
+        schema:
+          type: object
+          properties:
+            employeeId:
+              type: string
+            recipientEmail:
+              type: string
+            employeeName:
+              type: string
+            department:
+              type: string
+            startDate:
+              type: string
+              format: date
+          required: ["employeeId", "recipientEmail", "employeeName"]
+
+      - name: send_manager_notification
+        description: "Notify manager about new employee"
+        endpoint: "/mcp/notifications/manager"
+        method: POST
+
+      - name: send_it_setup_request
+        description: "Request IT setup for new employee"
+        endpoint: "/mcp/notifications/it-setup"
+        method: POST
+
+      - name: send_batch_notifications
+        description: "Send multiple notifications at once"
+        endpoint: "/mcp/notifications/send-batch"
+        method: POST
+
+# Agent Network Instructions for Groq LLM
+instructions: |
+  You are an AI assistant specialized in HR onboarding processes. You have access to three MCP servers:
+  
+  1. **Employee MCP** - Manages employee records and HR data
+  2. **Asset MCP** - Handles asset allocation and inventory
+  3. **Notification MCP** - Manages communications and notifications
+  
+  ## Core Responsibilities:
+  
+  ### Employee Onboarding Workflow:
+  1. **Create Employee Record** - Use employee-mcp to create new employee
+  2. **Allocate Assets** - Use asset-mcp to assign necessary equipment
+  3. **Send Notifications** - Use notification-mcp to inform stakeholders
+  
+  ### Standard Asset Allocation by Department:
+  - **Engineering**: laptop, monitor, keyboard, mouse, headset, access_card
+  - **HR/Marketing/Finance**: laptop, monitor, keyboard, mouse, access_card
+  - **Operations**: laptop, access_card, parking_pass
+  
+  ### Communication Protocol:
+  - Always send welcome email to new employee
+  - Notify direct manager about new team member
+  - Send IT setup request for technical equipment
+  - Confirm asset allocation completion
+  
+  ## Response Guidelines:
+  - Be professional and helpful
+  - Provide status updates for each step
+  - Handle errors gracefully with clear explanations
+  - Always confirm successful completion of onboarding steps
+  - Use structured responses with clear next steps
+
+# Workflow Definitions
+workflows:
+  # Complete Employee Onboarding
+  - name: complete_onboarding
+    description: "Complete end-to-end employee onboarding process"
+    trigger: "onboard new employee"
+    steps:
+      - action: create_employee
+        server: employee-mcp
+        tool: create_employee
+        
+      - action: allocate_standard_assets
+        server: asset-mcp
+        tool: allocate_asset
+        condition: "employee creation successful"
+        
+      - action: send_welcome_notifications
+        server: notification-mcp
+        tool: send_batch_notifications
+        condition: "asset allocation successful"
+
+  # Asset Request Workflow
+  - name: asset_request
+    description: "Handle additional asset requests"
+    trigger: "request assets for employee"
+    steps:
+      - action: check_employee_exists
+        server: employee-mcp
+        tool: get_employee
+        
+      - action: check_asset_availability
+        server: asset-mcp
+        tool: get_asset_inventory
+        
+      - action: allocate_requested_assets
+        server: asset-mcp
+        tool: allocate_asset
+        condition: "employee exists and assets available"
+        
+      - action: notify_allocation_complete
+        server: notification-mcp
+        tool: send_manager_notification
+
+  # Status Check Workflow
+  - name: check_onboarding_status
+    description: "Check the status of employee onboarding"
+    trigger: "check onboarding status"
+    steps:
+      - action: get_employee_info
+        server: employee-mcp
+        tool: get_employee
+        
+      - action: get_allocated_assets
+        server: asset-mcp
+        tool: get_employee_assets
+        
+      - action: compile_status_report
+        description: "Compile comprehensive onboarding status"
+
+# Environment Configuration
+environment:
+  development:
+    EMPLOYEE_MCP_URL: "http://localhost:8081"
+    ASSET_MCP_URL: "http://localhost:8082"
+    NOTIFICATION_MCP_URL: "http://localhost:8083"
+    
+  production:
+    EMPLOYEE_MCP_URL: "https://employee-onboarding-mcp-server.us-east-1.cloudhub.io"
+    ASSET_MCP_URL: "https://asset-allocation-mcp-server.us-east-1.cloudhub.io"
+    NOTIFICATION_MCP_URL: "https://notification-mcp-server.us-east-1.cloudhub.io"
+
+# Security Configuration
+security:
+  authentication:
+    type: api_key
+    header: X-API-Key
+    value: "${API_KEY_VALUE}"
+  
+  rateLimiting:
+    enabled: true
+    requestsPerMinute: 60
+    burstLimit: 10
+  
+  cors:
+    enabled: true
+    allowedOrigins: ["*"]
+    allowedMethods: ["GET", "POST", "PUT", "DELETE"]
+
+# Logging and Monitoring
+logging:
+  level: INFO
+  format: json
+  includeRequestResponse: true
+  
+monitoring:
+  healthChecks:
+    enabled: true
+    interval: 30000  # 30 seconds
+    timeout: 5000    # 5 seconds
+  
+  metrics:
+    enabled: true
+    endpoint: "/metrics"
+    include: ["request_count", "response_time", "error_rate"]
+
+# Error Handling
+errorHandling:
+  retryAttempts: 3
+  retryDelay: 1000  # 1 second
+  circuitBreaker:
+    enabled: true
+    failureThreshold: 5
+    recoveryTimeout: 30000
+
+# Agent Network Metadata
+agentCapabilities:
+  - employee_management
+  - asset_allocation
+  - notification_services
+  - workflow_orchestration
+  - status_tracking
+  - error_handling
+  - multi_environment_support
+
+version: "1.0.0"
+lastUpdated: "2026-02-20T16:55:00Z"
