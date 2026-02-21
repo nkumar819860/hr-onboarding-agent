@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+      http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+      http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <!-- COMPLETE HR ONBOARDING ORCHESTRATION -->
+    <flow name="complete-hr-onboarding" doc:name="Complete HR Onboarding">
+        <http:listener config-ref="HTTPS_Listener_config"
+                       path="/agent/onboard"
+                       allowedMethods="POST" doc:name="Complete Onboarding Listener"/>
+        
+        <ee:transform doc:name="Validate Onboarding Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.employee? and payload.employee.name? and payload.employee.email?)
+    payload
+else
+    error("VALIDATION_ERROR", "employee.name and employee.email are required")]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <set-variable value="#[uuid()]" variableName="onboardingId" doc:name="Set Onboarding ID"/>
+        <set-variable value="#[now()]" variableName="startTime" doc:name="Set Start Time"/>
+        
+        <logger level="INFO" doc:name="Log Onboarding Start" 
+            message="Starting HR onboarding for: #[payload.employee.email] with ID: #[vars.onboardingId]"/>
+
+        <!-- STEP 1: Create Employee -->
+        <try doc:name="Step 1 - Create Employee">
+            <http:request method="POST" path="/mcp/tools/employees" config-ref="Employee_MCP_Config" 
+                doc:name="Create Employee in MCP">
+                <http:body><![CDATA[#[payload.employee]]]></http:body>
+                <http:headers><![CDATA[#[{
+                    'Content-Type': 'application/json',
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="#[payload]" variableName="employeeResult" doc:name="Store Employee Result"/>
+            <logger level="INFO" doc:name="Log Employee Created" 
+                message="Employee created: #[vars.employeeResult.employee.id]"/>
+            <error-handler ref="Global_Error_Handler"/>
+        </try>
+
+        <!-- STEP 2: Allocate Assets -->
+        <try doc:name="Step 2 - Allocate Assets">
+            <choice doc:name="Check if Assets Requested">
+                <when expression="#[payload.assets? and sizeOf(payload.assets) > 0]">
+                    <foreach collection="#[payload.assets]" doc:name="For Each Asset">
+                        <http:request method="POST" path="#['/mcp/assets/allocate/' ++ vars.employeeResult.employee.id]" 
+                            config-ref="Asset_MCP_Config" doc:name="Allocate Asset">
+                            <http:body><![CDATA[#[payload]]]></http:body>
+                            <http:headers><![CDATA[#[{
+                                'Content-Type': 'application/json',
+                                (p('api.key.header')): p('api.key.value')
+                            }]]]></http:headers>
+                        </http:request>
+                        <logger level="INFO" doc:name="Log Asset Allocated" 
+                            message="Asset allocated: #[payload.asset.name] to employee: #[vars.employeeResult.employee.id]"/>
+                    </foreach>
+                    <set-variable value="true" variableName="assetsAllocated" doc:name="Assets Allocated"/>
+                </when>
+                <otherwise>
+                    <set-variable value="false" variableName="assetsAllocated" doc:name="No Assets"/>
+                    <logger level="INFO" doc:name="Log No Assets" message="No assets to allocate"/>
+                </otherwise>
+            </choice>
+            <error-handler ref="Global_Error_Handler"/>
+        </try>
+
+        <!-- STEP 3: Send Notifications -->
+        <try doc:name="Step 3 - Send Notifications">
+            <ee:transform doc:name="Prepare Notification Data">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    employee: vars.employeeResult.employee,
+    onboardingId: vars.onboardingId,
+    assetsAllocated: vars.assetsAllocated,
+    notifications: [
+        {
+            type: "welcome_email",
+            recipient: vars.employeeResult.employee.email,
+            template: "employee_welcome"
+        },
+        {
+            type: "manager_notification", 
+            recipient: payload.employee.manager_email default "hr@company.com",
+            template: "new_employee_alert"
+        },
+        {
+            type: "it_notification",
+            recipient: "it@company.com",
+            template: "setup_required"
+        }
+    ]
+}]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+            
+            <http:request method="POST" path="/mcp/notifications/send-batch" 
+                config-ref="Notification_MCP_Config" doc:name="Send Notifications">
+                <http:headers><![CDATA[#[{
+                    'Content-Type': 'application/json',
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="#[payload]" variableName="notificationResult" doc:name="Store Notification Result"/>
+            <logger level="INFO" doc:name="Log Notifications Sent" 
+                message="Notifications sent for onboarding: #[vars.onboardingId]"/>
+            <error-handler ref="Global_Error_Handler"/>
+        </try>
+
+        <!-- Final Response -->
+        <ee:transform doc:name="Format Final Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    status: "success",
+    onboardingId: vars.onboardingId,
+    message: "HR onboarding completed successfully",
+    employee: vars.employeeResult.employee,
+    assetsAllocated: vars.assetsAllocated,
+    notificationsSent: vars.notificationResult.sent default 0,
+    processingTime: (now() - vars.startTime) as Number {unit: "milliseconds"},
+    timestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- GET ONBOARDING STATUS -->
+    <flow name="get-onboarding-status" doc:name="Get Onboarding Status">
+        <http:listener config-ref="HTTPS_Listener_config"
+                       path="/agent/onboard/{employeeId}/status"
+                       allowedMethods="GET" doc:name="Get Status Listener"/>
+
+        <set-variable value="#[attributes.pathParams.employeeId]" variableName="employeeId" doc:name="Set Employee ID"/>
+        
+        <!-- Get Employee Status -->
+        <try doc:name="Get Employee Status">
+            <http:request method="GET" path="#['/mcp/tools/employees/' ++ vars.employeeId]" 
+                config-ref="Employee_MCP_Config" doc:name="Get Employee">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="#[payload]" variableName="employeeStatus" doc:name="Store Employee Status"/>
+            <error-handler ref="Global_Error_Handler"/>
+        </try>
+
+        <!-- Get Asset Status -->
+        <try doc:name="Get Asset Status">
+            <http:request method="GET" path="#['/mcp/assets/employee/' ++ vars.employeeId]" 
+                config-ref="Asset_MCP_Config" doc:name="Get Employee Assets">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="#[payload]" variableName="assetStatus" doc:name="Store Asset Status"/>
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <set-variable value="#[{assets: [], count: 0}]" variableName="assetStatus"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+
+        <!-- Aggregate Status -->
+        <ee:transform doc:name="Format Status Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    employeeId: vars.employeeId,
+    onboardingStatus: {
+        employee: {
+            status: vars.employeeStatus.status default "unknown",
+            created: vars.employeeStatus.employee.created_at default null,
+            department: vars.employeeStatus.employee.department default null,
+            position: vars.employeeStatus.employee.position default null
+        },
+        assets: {
+            count: vars.assetStatus.count default 0,
+            allocated: vars.assetStatus.assets default []
+        },
+        overallStatus: if (vars.employeeStatus.status == "found" and vars.employeeStatus.employee.status == "ACTIVE") 
+                          (if (vars.assetStatus.count > 0) "completed" else "pending_assets")
+                       else if (vars.employeeStatus.status == "found")
+                          "pending_activation"
+                       else "not_found"
+    },
+    timestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- LIST ALL ONBOARDING EMPLOYEES -->
+    <flow name="list-onboarding-employees" doc:name="List Onboarding Employees">
+        <http:listener config-ref="HTTPS_Listener_config"
+                       path="/agent/onboard/employees"
+                       allowedMethods="GET" doc:name="List Employees Listener"/>
+
+        <!-- Get All Employees -->
+        <try doc:name="Get All Employees">
+            <http:request method="GET" path="/mcp/tools/employees" 
+                config-ref="Employee_MCP_Config" doc:name="Get All Employees">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <error-handler ref="Global_Error_Handler"/>
+        </try>
+
+        <ee:transform doc:name="Format Employee List">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    status: "success",
+    totalEmployees: payload.count default 0,
+    employees: payload.employees default [] map {
+        id: $.id,
+        employee_id: $.employee_id,
+        name: $.first_name ++ " " ++ $.last_name,
+        email: $.email,
+        department: $.department_name default $.department,
+        position: $.position,
+        status: $.status,
+        hire_date: $.hire_date,
+        onboarding_complete: $.status == "ACTIVE"
+    },
+    timestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- HEALTH CHECK -->
+    <flow name="agent-health" doc:name="Agent Health Check">
+        <http:listener config-ref="HTTPS_Listener_config"
+                       path="/agent/health"
+                       allowedMethods="GET" doc:name="Health Check Listener"/>
+
+        <ee:transform doc:name="Check MCP Services">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    agent: p('agent.name'),
+    version: p('agent.version'),
+    status: "healthy",
+    deployment_mode: p('deployment.mode'),
+    timestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <!-- Test Employee MCP -->
+        <try doc:name="Test Employee MCP">
+            <http:request method="GET" path="/mcp/health" 
+                config-ref="Employee_MCP_Config" doc:name="Ping Employee MCP" 
+                responseTimeout="5000">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="healthy" variableName="employeeMcpStatus" doc:name="Employee MCP Healthy"/>
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <set-variable value="unhealthy" variableName="employeeMcpStatus" doc:name="Employee MCP Unhealthy"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+
+        <!-- Test Asset MCP -->
+        <try doc:name="Test Asset MCP">
+            <http:request method="GET" path="/mcp/health" 
+                config-ref="Asset_MCP_Config" doc:name="Ping Asset MCP" 
+                responseTimeout="5000">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="healthy" variableName="assetMcpStatus" doc:name="Asset MCP Healthy"/>
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <set-variable value="unhealthy" variableName="assetMcpStatus" doc:name="Asset MCP Unhealthy"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+
+        <!-- Test Notification MCP -->
+        <try doc:name="Test Notification MCP">
+            <http:request method="GET" path="/mcp/health" 
+                config-ref="Notification_MCP_Config" doc:name="Ping Notification MCP" 
+                responseTimeout="5000">
+                <http:headers><![CDATA[#[{
+                    (p('api.key.header')): p('api.key.value')
+                }]]]></http:headers>
+            </http:request>
+            <set-variable value="healthy" variableName="notificationMcpStatus" doc:name="Notification MCP Healthy"/>
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <set-variable value="unhealthy" variableName="notificationMcpStatus" doc:name="Notification MCP Unhealthy"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+
+        <ee:transform doc:name="Final Health Status">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    agent: p('agent.name'),
+    version: p('agent.version'),
+    status: if (vars.employeeMcpStatus == "healthy" and vars.assetMcpStatus == "healthy" and vars.notificationMcpStatus == "healthy") 
+                "healthy" 
+            else "degraded",
+    deployment_mode: p('deployment.mode'),
+    mcp_services: {
+        employee_mcp: vars.employeeMcpStatus default "unknown",
+        asset_mcp: vars.assetMcpStatus default "unknown",
+        notification_mcp: vars.notificationMcpStatus default "unknown"
+    },
+    endpoints: {
+        complete_onboarding: "/agent/onboard",
+        onboarding_status: "/agent/onboard/{employeeId}/status",
+        list_employees: "/agent/onboard/employees"
+    },
+    timestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+</mule>

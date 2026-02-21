@@ -1,0 +1,333 @@
+openapi: 3.0.3
+info:
+  title: Asset Allocation MCP API
+  description: |
+    Asset Allocation Model Context Protocol (MCP) Server API for HR onboarding automation.
+    Provides comprehensive asset management capabilities including allocation, tracking, and lifecycle management.
+  version: 1.0.0
+  contact:
+    name: HR Systems Team
+    email: hr-systems@company.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://asset-allocation-mcp-complete-0etp45.rajrd4-1.usa-e1.cloudhub.io
+    description: Production CloudHub 2.0 Server
+  - url: http://localhost:8081
+    description: Local Development Server
+
+tags:
+  - name: assets
+    description: Asset management operations
+  - name: allocation
+    description: Asset allocation operations  
+  - name: health
+    description: Health check operations
+  - name: mcp
+    description: MCP protocol operations
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check endpoint
+      description: Check the health status of the Asset Allocation MCP server
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /assets:
+    get:
+      tags: [assets]
+      summary: List all assets
+      description: Retrieve a list of all available assets in the inventory
+      operationId: getAllAssets
+      parameters:
+        - name: category
+          in: query
+          description: Filter assets by category
+          required: false
+          schema:
+            type: string
+            enum: [laptop, monitor, keyboard, mouse, headset, phone, desk, chair, access_card, parking_pass]
+        - name: status
+          in: query
+          description: Filter assets by status
+          required: false
+          schema:
+            type: string
+            enum: [available, allocated, maintenance, retired]
+      responses:
+        '200':
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Asset'
+
+  /assets/{employeeId}/allocate:
+    post:
+      tags: [allocation]
+      summary: Allocate assets to employee
+      description: Allocate specified assets to an employee during onboarding
+      operationId: allocateAssets
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Employee ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocationRequest'
+      responses:
+        '200':
+          description: Assets allocated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationResponse'
+        '400':
+          description: Invalid request
+        '404':
+          description: Employee or assets not found
+
+  /assets/{employeeId}:
+    get:
+      tags: [allocation]
+      summary: Get employee assets
+      description: Get all assets assigned to a specific employee
+      operationId: getEmployeeAssets
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Employee ID
+      responses:
+        '200':
+          description: Employee assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AllocatedAsset'
+        '404':
+          description: Employee not found
+
+  /assets/{assetId}/status:
+    put:
+      tags: [assets]
+      summary: Update asset status
+      description: Update the status of a specific asset
+      operationId: updateAssetStatus
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Asset ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdateRequest'
+      responses:
+        '200':
+          description: Asset status updated
+        '404':
+          description: Asset not found
+
+  /assets/{employeeId}/{assetId}:
+    delete:
+      tags: [allocation]
+      summary: Deallocate asset
+      description: Remove asset allocation from employee
+      operationId: deallocateAsset
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Employee ID
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Asset ID
+      responses:
+        '200':
+          description: Asset deallocated successfully
+        '404':
+          description: Employee or asset not found
+
+  /mcp/tools:
+    get:
+      tags: [mcp]
+      summary: List available MCP tools
+      description: Get list of available Model Context Protocol tools
+      operationId: getMCPTools
+      responses:
+        '200':
+          description: Available MCP tools
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPToolsResponse'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "UP"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "LAPTOP001"
+        category:
+          type: string
+          enum: [laptop, monitor, keyboard, mouse, headset, phone, desk, chair, access_card, parking_pass]
+        brand:
+          type: string
+          example: "Dell"
+        model:
+          type: string
+          example: "Latitude 5520"
+        serialNumber:
+          type: string
+          example: "SN123456789"
+        status:
+          type: string
+          enum: [available, allocated, maintenance, retired]
+        location:
+          type: string
+          example: "Warehouse A"
+        purchaseDate:
+          type: string
+          format: date
+        warrantyExpiry:
+          type: string
+          format: date
+
+    AllocatedAsset:
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            employeeId:
+              type: string
+            allocationDate:
+              type: string
+              format: date-time
+            returnDate:
+              type: string
+              format: date-time
+              nullable: true
+
+    AllocationRequest:
+      type: object
+      properties:
+        assetIds:
+          type: array
+          items:
+            type: string
+          example: ["LAPTOP001", "MONITOR002", "KEYBOARD003"]
+        requestedBy:
+          type: string
+          example: "hr@company.com"
+        notes:
+          type: string
+          example: "New employee onboarding assets"
+      required:
+        - assetIds
+
+    AllocationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        allocatedAssets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocatedAsset'
+        failedAllocations:
+          type: array
+          items:
+            type: object
+            properties:
+              assetId:
+                type: string
+              reason:
+                type: string
+        allocationId:
+          type: string
+
+    StatusUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [available, allocated, maintenance, retired]
+        reason:
+          type: string
+        updatedBy:
+          type: string
+      required:
+        - status
+
+    MCPToolsResponse:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              inputSchema:
+                type: object
+        version:
+          type: string
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKeyAuth: []
